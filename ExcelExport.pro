@@ -4,8 +4,8 @@
 #
 #-------------------------------------------------
 
-QT       += core gui xlsx xml axcontainer
-CONFIG += c++11
+QT       += core gui xlsx xml axcontainer sql
+CONFIG += c++11 thread
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = ExcelExport
@@ -18,13 +18,34 @@ SOURCES += main.cpp\
     fontchina.cpp \
     detailxmlwidget.cpp \
     detailexcelwidget.cpp \
-    sourcelistwidget.cpp
+    sourcelistwidget.cpp \
+    fielddialog.cpp \
+    qmessageinputdialog.cpp \
+    baseselectlist.cpp \
+    batchgeneratedialog.cpp \
+    qsqlmanager.cpp \
+    filterdialog.cpp \
+    batchgeneratethread.cpp \
+    batchfilterthread.cpp
 
 HEADERS  += excelexport.h \
     global.h \
     fontchina.h \
     detailxmlwidget.h \
     detailexcelwidget.h \
-    sourcelistwidget.h
+    sourcelistwidget.h \
+    fielddialog.h \
+    qmessageinputdialog.h \
+    baseselectlist.h \
+    batchgeneratedialog.h \
+    qsqlmanager.h \
+    filterdialog.h \
+    batchgeneratethread.h \
+    batchfilterthread.h
 
-FORMS    += excelexport.ui
+FORMS    += excelexport.ui \
+    fielddialog.ui \
+    qmessageinputdialog.ui \
+    batchgeneratedialog.ui \
+    filterdialog.ui
+

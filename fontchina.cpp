@@ -24,3 +24,22 @@ const char* FontChina::G2U(const char* gb2312)
     return str;
 
 }
+
+bool FontChina::isAscII(const char* src)
+{
+    int i = 0;
+    unsigned long asicount = 0;
+    unsigned long slen = strlen(src);
+    unsigned char chr;
+    while (true) {
+        chr = *(src + i);
+        if (chr == '\0' || i >= slen) break;
+        i++;
+        if ((chr & 0x80) == 0)asicount++;
+        else return false;
+    }
+    if (asicount >= slen) {
+        return true;
+    }
+    return false;
+}

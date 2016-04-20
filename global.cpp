@@ -3,29 +3,29 @@
 
 QPlainTextEdit* logText = NULL;
 QListWidget* g_listWidget = NULL;
-QString g_saveDir = "";
 QWidget* g_DetailXmlWidget = NULL;
 QWidget* g_DetailExcelWidget = NULL;
+QWidget* g_FieldDialog = NULL;
+QWidget* g_FilterDialog = NULL;
 
-void addConsoleInfo(char* fmt, ...)
+void addConsoleInfo(std::string fmt, ...)
 {
-    char buf[4096] = { 0 };
+    char buf[fmt.length()+1] = {0};
     char* p = buf;
     std::string str;
     va_list args;
-    std::string pattern = fmt;
     int count = 0;
     size_t pos = 0;
     while (pos != std::string::npos){
-        pos = pattern.find("%", pos);
+        pos = fmt.find("%", pos);
         if (pos != std::string::npos){
             count++;
-            pos += (pattern.size() + 1);
+            pos += (fmt.size() + 1);
         }
     }
     if (count != 0){
         va_start(args, fmt);
-        vsprintf(p, fmt, args);
+        vsprintf(p, fmt.c_str(), args);
         va_end(args);
         str = buf;
         str += "\n";

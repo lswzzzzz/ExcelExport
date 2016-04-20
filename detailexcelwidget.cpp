@@ -1,16 +1,21 @@
 #include "detailexcelwidget.h"
 #include "QtXlsx"
 #include "global.h"
+#include "fielddialog.h"
+#include "QMessageBox"
+#include "sourcelistwidget.h"
+#include "qsqlmanager.h"
 
 DetailExcelWidget::DetailExcelWidget(QWidget *parent) : QWidget(parent)
 {
     hlayout = new QHBoxLayout;
     glayout = new QGridLayout;
     vlayout = new QVBoxLayout;
-    xlsx = NULL;
-    excel = new QAxObject("Excel.Application", 0);
-    excel->dynamicCall("SetVisible (bool Visible)", "false");//不显示窗体
-    excel->setProperty("DisplayAlerts", false);//不显示任何警告信息。如果为true那么在关闭是会出现类似“文件已修改，是否保存”的提示
+    xlsx = nullptr;
+}
+
+DetailExcelWidget::~DetailExcelWidget()
+{
 }
 
 void DetailExcelWidget::getXlsxData(QString filename)
@@ -19,17 +24,12 @@ void DetailExcelWidget::getXlsxData(QString filename)
     file_name = filename;
     delete xlsx;
     xlsx = new QXlsx::Document(filename);
-    QAxObject *workbooks = excel->querySubObject("WorkBooks");//获取工作簿集合
-    workbooks->dynamicCall("Open (const QString&)", QString(filename));
-    QAxObject* workbook = excel->querySubObject("ActiveWorkBook");
     auto namelist = xlsx->sheetNames();
     for(int i=0; i<namelist.size(); i++){
         auto sheetname = namelist.at(i);
         Worksheet* sheet = dynamic_cast<Worksheet*>(xlsx->sheet(sheetname));
         if(checkValid(sheet)){
             getSheetData(sheet);
-            auto workSheet = workbook->querySubObject("Sheets(int)", i+1);
-            qAxVec.push_back(workSheet);
         }
     }
     addToExcelWidget();
@@ -38,29 +38,8 @@ void DetailExcelWidget::getXlsxData(QString filename)
 void DetailExcelWidget::getSheetData(Worksheet* sheet)
 {
     sheetName.push_back(sheet->sheetName());
-    QVector<QStringList>* vec = new QVector<QStringList>;
-    dataVec.push_back(vec);
     readHead(sheet);
     readType(sheet);
-}
-
-void DetailExcelWidget::readRow(Worksheet* work_sheet, int row, int colCount, int index)
-{
-    QStringList strList;
-    QString value = work_sheet->read(row, 1).toString();  //获取单元格内容
-    if (value == "")return;
-    for (int j = 1; j <= colCount; j++)
-    {
-        QString value = work_sheet->read(row, j).toString();
-        if(value.size() > 0 && value.at(0) == QChar('=')){
-            auto workSheet = qAxVec.at(index);
-            QAxObject *cell = workSheet->querySubObject("Cells(int,int)", row, j);
-            value = cell->property("Value").toString();  //获取单元格内容
-            addConsoleInfo(value.toLocal8Bit().data());
-        }
-        strList << value;
-    }
-    dataVec.at(index)->push_back(strList);
 }
 
 void DetailExcelWidget::readHead(Worksheet * sheet)
@@ -74,6 +53,15 @@ void DetailExcelWidget::readHead(Worksheet * sheet)
         item->Checkbox = new QCheckBox;
         item->Checkbox->setText(head);
         item->Checkbox->setCheckState(Qt::CheckState::Checked);
+        auto  dialog = dynamic_cast<FieldDialog*>(g_FieldDialog);
+        auto list = dialog->getIgnoreList();
+        for(int k=0; k<list.size(); k++){
+            auto name = list.at(k);
+            if(head == name){
+                item->Checkbox->setCheckState(Qt::CheckState::Unchecked);
+                break;
+            }
+        }
         vec->push_back(item);
     }
     m_vec.push_back(vec);
@@ -88,11 +76,15 @@ void DetailExcelWidget::readType(Worksheet * sheet)
         if (head.compare("int", Qt::CaseInsensitive) == 0){
             vec->push_back("int");
         }
-        else if (head.compare("string", Qt::CaseInsensitive) == 0 || head.compare("helper", Qt::CaseInsensitive) == 0){
+        else if (head.compare("string", Qt::CaseInsensitive) == 0){
             vec->push_back("string");
         }
         else if (head.compare("number", Qt::CaseInsensitive) == 0){
-            vec->push_back("float");
+            vec->push_back("double");
+        }else if(head.compare("helper", Qt::CaseInsensitive) == 0){
+            vec->push_back("helper");
+        }else{
+            vec->push_back("other");
         }
     }
     typeVec.push_back(vec);
@@ -100,8 +92,48 @@ void DetailExcelWidget::readType(Worksheet * sheet)
 
 void DetailExcelWidget::writeToJson()
 {
-    translateTableToJson();
-    writeStart();
+    isBatch = false;
+    BatchGenerateThread* t = new BatchGenerateThread();
+    connect(t, SIGNAL(writeFinishSignal(QString)), this, SLOT(writeJsonFinished(QString)));
+    generateVec.push_back(t);
+    t->setXlsxFile(file_name);
+    t->addTypeVec(typeVec);
+    QVector<QStringList> vec__;
+    addConsoleInfo("%s %d", file_name.toLocal8Bit().data(), m_vec.size());
+    for(int i=0; i<m_vec.size(); i++){
+        auto vecChild = m_vec.at(i);
+        QStringList listChild;
+        for(int n=0; n<vecChild->size(); n++){
+            auto item = vecChild->at(n);
+            listChild.push_back(item->Checkbox->text());
+        }
+        vec__.push_back(listChild);
+    }
+    t->addNameVec(vec__);
+    t->start();
+}
+
+void DetailExcelWidget::checkError()
+{
+    isBatch = false;
+    BatchFilterThread* t = new BatchFilterThread();
+    QObject::connect(t, SIGNAL(hasErrorSignal(QString)), this, SLOT(findError(QString)));
+    QObject::connect(t, SIGNAL(noErrorSignal(QString)), this, SLOT(noError(QString)));
+    filterVec.push_back(t);
+    t->setFile(file_name);
+    t->changeToFilterType(typeVec);
+    QVector<QStringList> vec__;
+    for(int i=0; i<m_vec.size(); i++){
+        auto vecChild = m_vec.at(i);
+        QStringList listChild;
+        for(int n=0; n<vecChild->size(); n++){
+            auto item = vecChild->at(n);
+            listChild.push_back(item->Checkbox->text());
+        }
+        vec__.push_back(listChild);
+    }
+    t->addNameVec(vec__);
+    t->start();
 }
 
 void DetailExcelWidget::deleteVec()
@@ -120,22 +152,29 @@ void DetailExcelWidget::deleteVec()
         delete buttonVec.at(i);
     }
     buttonVec.clear();
-    for (int i = 0; i < dataVec.size(); i++){
-        delete dataVec.at(i);
-    }
-    dataVec.clear();
     for (int i = 0; i < typeVec.size(); i++){
         delete typeVec.at(i);
     }
     typeVec.clear();
     sheetName.clear();
-    sheetBuVec.clear();
     for (int i = 0; i < widgetVec.size(); i++){
         hlayout->removeWidget(widgetVec.at(i));
         delete widgetVec.at(i);
     }
     widgetVec.clear();
-    qAxVec.clear();
+}
+
+void DetailExcelWidget::deleteBatchVec()
+{
+    for(int i=0; i<filterVec.size(); i++){
+        delete filterVec.at(i);
+    }
+    filterVec.clear();
+    for(int i=0; i<generateVec.size(); i++){
+        delete generateVec.at(i);
+    }
+    generateVec.clear();
+    errorFileList.clear();
 }
 
 void DetailExcelWidget::addToExcelWidget()
@@ -170,80 +209,6 @@ void DetailExcelWidget::addToExcelWidget()
     setLayout(vlayout);
 }
 
-void DetailExcelWidget::translateTableToJson()
-{
-    if (dataVec.size() > 0 && dataVec.at(0)->size()>0)return;
-    auto namelist = xlsx->sheetNames();
-    for(int i=0; i<namelist.size(); i++){
-        auto sheetname = namelist.at(i);
-        Worksheet* sheet = dynamic_cast<Worksheet*>(xlsx->sheet(sheetname));
-        QString name = sheet->sheetName();
-        int index = checkInSheetVec(name);
-        if(index > -1){
-            int row = sheet->dimension().lastRow();
-            int col = sheet->dimension().lastColumn();
-            for(int k=4; k<=row; k++){
-                readRow(sheet, k, col, index);
-            }
-        }
-    }
-}
-
-void DetailExcelWidget::writeStart()
-{
-    for (int i = 0; i < sheetName.size(); i++){
-        QVariantMap map;
-        int size = dataVec.at(i)->size();
-        for (int k = 0; k < size; k++){
-            auto strList = dataVec.at(i)->at(k);
-            auto str = strList.at(0);
-            QVariantMap data;
-            for (int n = 0; n < m_vec.at(i)->size(); n++){
-                if (n >= 1){
-                    auto box = m_vec.at(i)->at(n)->Checkbox;
-                    if (box->checkState() == Qt::CheckState::Checked){
-                        if (strList.at(n) == ""){
-                            continue;
-                        }
-                        if (typeVec.at(i)->at(n) == "int"){
-                            auto str = strList.at(n);
-                            data.insert(box->text(), str.toInt());
-                        }
-                        else if (typeVec.at(i)->at(n) == "string"){
-                            auto str = strList.at(n);
-                            data.insert(box->text(), str);
-                        }
-                        else if (typeVec.at(i)->at(n) == "float"){
-                            auto str = strList.at(n);
-                            data.insert(box->text(), str.toFloat());
-                        }
-                    }
-                }
-            }
-            if (str != ""){
-                map.insert(str, data);
-            }
-        }
-        QString path = file_name.section("/", 0, -2);
-        path += "/";
-        auto name = file_name.section("/", -1).section(".", 0, -2);
-        name += "_";
-        name += sheetName.at(i);
-        path += name;
-        path += ".json";
-        QFile dFile(path);
-        if (!dFile.open(QIODevice::WriteOnly | QIODevice::Text))
-        {
-            return;
-        }
-        QTextStream out(&dFile);
-        QJsonDocument doc = QJsonDocument::fromVariant(map);
-        out << doc.toJson();
-        dFile.close();
-    }
-    addConsoleInfo("导出成功");
-}
-
 bool DetailExcelWidget::checkValid(Worksheet* sheet)
 {
     int row = sheet->dimension().lastRow();
@@ -259,12 +224,104 @@ bool DetailExcelWidget::checkValid(Worksheet* sheet)
     return false;
 }
 
-int DetailExcelWidget::checkInSheetVec(QString name)
+void DetailExcelWidget::BatchGenerate(QVector<int> vec)
 {
-    for (int i = 0; i < sheetName.size(); i++){
-        if (name == sheetName.at(i)){
-            return i;
+    BatchTotal = vec.size();
+    curCount = 0;
+    isBatch = true;
+    deleteBatchVec();
+    auto sourceListWidget = dynamic_cast<SourceListWidget*>(g_listWidget);
+    for(int i=0; i<vec.size(); i++){
+        int index = vec.at(i);
+        auto item = sourceListWidget->item(index);
+        QString name = item->data(Qt::UserRole).toString();
+        BatchGenerateThread* t = new BatchGenerateThread();
+        connect(t, SIGNAL(writeFinishSignal(QString)), this, SLOT(writeJsonFinished(QString)));
+        t->setXlsxFile(name);
+        generateVec.push_back(t);
+    }
+    generateVec.at(0)->start();
+}
+
+void DetailExcelWidget::BatchCheck(QVector<int> vec)
+{
+    BatchTotal = vec.size();
+    curCount = 0;
+    isBatch = true;
+    deleteBatchVec();
+    auto sourceListWidget = dynamic_cast<SourceListWidget*>(g_listWidget);
+    for(int i=0; i<vec.size(); i++){
+        int index = vec.at(i);
+        auto item = sourceListWidget->item(index);
+        QString name = item->data(Qt::UserRole).toString();
+        BatchFilterThread* t = new BatchFilterThread();
+        connect(t, SIGNAL(hasErrorSignal(QString)), this, SLOT(findError(QString)));
+        connect(t, SIGNAL(noErrorSignal(QString)), this, SLOT(noError(QString)));
+        t->setFile(name);
+        filterVec.push_back(t);
+    }
+    filterVec.at(0)->start();
+}
+
+void DetailExcelWidget::findError(QString filename)
+{
+    if(!isBatch){
+        QMessageBox::warning(NULL, "发现错误", filename, QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    }else{
+        curCount++;
+        errorFileList.push_back(filename);
+        if(curCount < BatchTotal){
+            addConsoleInfo("当前检查进度%d/%d", curCount, BatchTotal);
+            filterVec.at(curCount)->start();
+        }else{
+            QString str;
+            for(int i=0; i<errorFileList.size(); i++){
+                str += errorFileList.at(i);
+                str += "\n";
+            }
+            addConsoleInfo("检查完成", curCount, BatchTotal);
+            QMessageBox::warning(NULL, "发现错误", str, QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
         }
     }
-    return -1;
+}
+
+void DetailExcelWidget::noError(QString filename)
+{
+    if(!isBatch){
+        QMessageBox::warning(NULL, "没有发现错误", "空", QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    }else{
+        curCount++;
+        if(curCount < BatchTotal){
+            addConsoleInfo("当前检查进度%d/%d", curCount, BatchTotal);
+            filterVec.at(curCount)->start();
+        }else{
+            QString str;
+            for(int i=0; i<errorFileList.size(); i++){
+                str += errorFileList.at(i);
+                str += "\n";
+            }
+            if(errorFileList.size() > 0){
+                QMessageBox::warning(NULL, "发现错误", str, QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+            }else{
+                addConsoleInfo("检查完成", curCount, BatchTotal);
+                QMessageBox::warning(NULL, "没有发现错误", "空", QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+            }
+        }
+    }
+}
+
+void DetailExcelWidget::writeJsonFinished(QString filename)
+{
+    if(!isBatch){
+        addConsoleInfo("导出%s成功", filename.section("/", -1).toLocal8Bit().data());
+    }else{
+         curCount++;
+         if(curCount < BatchTotal){
+             addConsoleInfo("当前生成进度%d/%d", curCount, BatchTotal);
+             generateVec.at(curCount)->start();
+         }else{
+             addConsoleInfo("导出所有文件完成");
+         }
+    }
+
 }

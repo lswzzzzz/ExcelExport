@@ -5,14 +5,25 @@
 
 SourceListWidget::SourceListWidget()
 {
-    connect(this, SIGNAL(itemClicked(QListWidgetItem*)), this, SLOT(itemClicked(QListWidgetItem*)));
+    connect(this, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(itemDoubleClicked(QListWidgetItem*)));
 }
 
 SourceListWidget::~SourceListWidget()
 {
 }
 
-void SourceListWidget::itemClicked(QListWidgetItem * item)
+QStringList SourceListWidget::getTableList()
+{
+    int count = this->count();
+    QStringList list;
+    for(int i=0; i<count; i++){
+        auto item = this->item(i);
+        list<<item->text();
+    }
+    return list;
+}
+
+void SourceListWidget::itemDoubleClicked(QListWidgetItem * item)
 {
 
     QString name = item->data(Qt::UserRole).toString();

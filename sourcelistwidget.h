@@ -10,9 +10,9 @@ class SourceListWidget : public QListWidget
 public:
     SourceListWidget();
     ~SourceListWidget();
-
+    QStringList getTableList();
 private slots:
-    void itemClicked(QListWidgetItem * item);
+    void itemDoubleClicked(QListWidgetItem * item);
 protected:
 
 };

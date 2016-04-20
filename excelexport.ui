@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>658</width>
-    <height>493</height>
+    <height>516</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,15 +20,15 @@
       <x>10</x>
       <y>390</y>
       <width>381</width>
-      <height>41</height>
+      <height>61</height>
      </rect>
     </property>
    </widget>
    <widget class="QPushButton" name="OpenButton">
     <property name="geometry">
      <rect>
-      <x>450</x>
-      <y>400</y>
+      <x>402</x>
+      <y>411</y>
       <width>75</width>
       <height>23</height>
      </rect>
@@ -40,8 +40,8 @@
    <widget class="QPushButton" name="GenerationButton">
     <property name="geometry">
      <rect>
-      <x>550</x>
-      <y>400</y>
+      <x>486</x>
+      <y>411</y>
       <width>75</width>
       <height>23</height>
      </rect>
@@ -102,6 +102,19 @@
      </widget>
     </widget>
    </widget>
+   <widget class="QPushButton" name="checkButton">
+    <property name="geometry">
+     <rect>
+      <x>571</x>
+      <y>411</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>排错</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
@@ -114,11 +127,21 @@
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>File</string>
+     <string>文件</string>
     </property>
     <addaction name="actionOpen"/>
+    <addaction name="actionGenerateDir"/>
+   </widget>
+   <widget class="QMenu" name="menuSetting">
+    <property name="title">
+     <string>设置</string>
+    </property>
+    <addaction name="actionField"/>
+    <addaction name="actionBatchGenerator"/>
+    <addaction name="actionFilterSetting"/>
    </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuSetting"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
    <attribute name="toolBarArea">
@@ -132,6 +155,26 @@
   <action name="actionOpen">
    <property name="text">
     <string>打开</string>
+   </property>
+  </action>
+  <action name="actionField">
+   <property name="text">
+    <string>字段设置</string>
+   </property>
+  </action>
+  <action name="actionBatchGenerator">
+   <property name="text">
+    <string>批量生成</string>
+   </property>
+  </action>
+  <action name="actionGenerateDir">
+   <property name="text">
+    <string>设置生成路径</string>
+   </property>
+  </action>
+  <action name="actionFilterSetting">
+   <property name="text">
+    <string>过滤器设置</string>
    </property>
   </action>
  </widget>

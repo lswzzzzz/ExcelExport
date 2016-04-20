@@ -6,8 +6,8 @@
 #include <QtXlsx>
 #include <QPushButton>
 #include <QCheckBox>
-#include <QAxWidget>
-#include <QAxObject>
+#include "batchfilterthread.h"
+#include "batchgeneratethread.h"
 
 QTXLSX_USE_NAMESPACE
 
@@ -15,25 +15,28 @@ class DetailExcelWidget : public QWidget
 {
     Q_OBJECT
 public:
+    ~DetailExcelWidget();
     explicit DetailExcelWidget(QWidget *parent = 0);
     void getXlsxData(QString filename);
     void getSheetData(Worksheet * sheet);
-    void readRow(Worksheet* work_sheet, int row, int colCount, int index);
     void readHead(Worksheet * work_sheet);
     void readType(Worksheet * work_sheet);
     void writeToJson();
     void deleteVec();
+    void deleteBatchVec();
     void addToExcelWidget();
-    void translateTableToJson();
-    void writeStart();
+    void checkError();
     bool checkValid(Worksheet* sheet);
-signals:
-
+    void BatchGenerate(QVector<int> vec);
+    void BatchCheck(QVector<int> vec);
+protected slots:
+    void findError(QString filename);
+    void noError(QString filename);
+    void writeJsonFinished(QString filename);
 public:
     struct ItemData{
         QCheckBox* Checkbox;
     };
-    int checkInSheetVec(QString name);
 public slots:
 
 private:
@@ -41,16 +44,18 @@ private:
     QGridLayout* glayout;
     QVBoxLayout* vlayout;
     QVector<QVector<ItemData*>*> m_vec;
-    QVector<QVector<QStringList>*> dataVec;
     QVector<QVector<QString>*> typeVec;
     QVector<QString> sheetName;
-    QVector<QPushButton*> sheetBuVec;
     QVector<QWidget*> widgetVec;
     QVector<QWidget*> buttonVec;
-    QVector<QAxObject*> qAxVec;
     QString file_name;
     QXlsx::Document* xlsx;
-    QAxObject* excel;
+    QVector<BatchFilterThread*> filterVec;
+    QVector<BatchGenerateThread*> generateVec;
+    QStringList errorFileList;
+    int BatchTotal;
+    int curCount;
+    bool isBatch;
 };
 
 #endif // DETAILEXCELWIDGET_H
